@@ -198,12 +198,11 @@ static libcamera::Transform transform_from_image_params(const _GstLibcameraImage
 		transform = Transform::VFlip * transform;
 	bool ok;
 	Transform rot = libcamera::transformFromRotation(image_params.rotation, &ok);
-	if (!ok){
-		//throw std::runtime_error("illegal rotation value");
+	if(ok){
+		transform = rot * transform;
+	}else{
 		GST_WARNING("illegal rotation value");
-		return Transform::Identity;
 	}
-	transform = rot * transform;
 	if (!!(transform & Transform::Transpose)){
 		// throw std::runtime_error("transforms requiring transpose not supported");
 		// don't crash here, just log a warning and ignore
@@ -589,7 +588,8 @@ gst_libcamera_src_task_enter(GstTask *task, [[maybe_unused]] GThread *thread,
 	g_assert(state->config_->size() == state->srcpads_.size());
 	// Consti10 TODO figure out rotation
 	//state->config_->transform = transform_from_image_params(self->image_params);
-	transform_from_image_params(self->image_params);
+	libcamera::Transform transform =transform_from_image_params(self->image_params);
+	state->config_->orientation = libcamera::Orientation::Rotate0 * transform;
 
 	for (gsize i = 0; i < state->srcpads_.size(); i++) {
 		GstPad *srcpad = state->srcpads_[i];
