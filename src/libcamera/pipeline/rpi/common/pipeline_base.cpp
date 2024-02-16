@@ -964,8 +964,14 @@ V4L2SubdeviceFormat CameraData::findBestFormat(const Size &req, unsigned int bit
 	V4L2SubdeviceFormat bestFormat;
 	bestFormat.colorSpace = ColorSpace::Raw;
 
-	constexpr float penaltyAr = 1500.0;
-	constexpr float penaltyBitDepth = 500.0;
+	//constexpr float penaltyAr = 1500.0;
+	//constexpr float penaltyBitDepth = 500.0;
+	// Consti10: It is really annoying how libcamera doesn't support selecting a sensor format
+	// taking the fps into account. rpi- apps do it, but with their own sauce, way too complicated.
+	// This doesn't fix the root cause, but at lease make it more likely a higher fps will work on
+	// a given resolution
+	constexpr float penaltyAr = 1;
+	constexpr float penaltyBitDepth=0;
 
 	/* Calculate the closest/best mode from the user requested size. */
 	for (const auto &iter : sensorFormats_) {
