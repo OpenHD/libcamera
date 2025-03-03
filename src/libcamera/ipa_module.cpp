@@ -169,7 +169,7 @@ Span<const uint8_t> elfLoadSymbol(Span<const uint8_t> elf, const char *symbol)
 	}
 
 	if (targetSymbol == nullptr) {
-		LOG(IPAModule, Error) << "Symbol " << symbol << " not found";
+		// LOG(IPAModule, Error) << "Symbol " << symbol << " not found";
 		return {};
 	}
 
@@ -289,7 +289,7 @@ int IPAModule::loadIPAModuleInfo()
 
 	Span<const uint8_t> info = elfLoadSymbol(data, "ipaModuleInfo");
 	if (info.size() < sizeof(info_)) {
-		LOG(IPAModule, Error) << "IPA module has no valid info";
+		// LOG(IPAModule, Error) << "IPA module has no valid info";
 		return -EINVAL;
 	}
 

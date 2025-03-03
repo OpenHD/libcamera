@@ -625,44 +625,47 @@ void Logger::parseLogFile()
  */
 void Logger::parseLogLevels()
 {
-	const char *debug = utils::secure_getenv("LIBCAMERA_LOG_LEVELS");
-	if (!debug)
-		return;
+    const char *debug = utils::secure_getenv("LIBCAMERA_LOG_LEVELS");
+    if (!debug) {
+        // If no environment variable is set, force all logs to ERROR
+        levels_.push_back({ "*", LogError });
+        return;
+    }
 
-	for (const char *pair = debug; *debug != '\0'; pair = debug) {
-		const char *comma = strchrnul(debug, ',');
-		size_t len = comma - pair;
+    for (const char *pair = debug; *debug != '\0'; pair = debug) {
+        const char *comma = strchrnul(debug, ',');
+        size_t len = comma - pair;
 
-		/* Skip over the comma. */
-		debug = *comma == ',' ? comma + 1 : comma;
+        /* Skip over the comma. */
+        debug = *comma == ',' ? comma + 1 : comma;
 
-		/* Skip to the next pair if the pair is empty. */
-		if (!len)
-			continue;
+        /* Skip to the next pair if the pair is empty. */
+        if (!len)
+            continue;
 
-		std::string category;
-		std::string level;
+        std::string category;
+        std::string level;
 
-		const char *colon = static_cast<const char *>(memchr(pair, ':', len));
-		if (!colon) {
-			/* 'x' is a shortcut for '*:x'. */
-			category = "*";
-			level = std::string(pair, len);
-		} else {
-			category = std::string(pair, colon - pair);
-			level = std::string(colon + 1, comma - colon - 1);
-		}
+        const char *colon = static_cast<const char *>(memchr(pair, ':', len));
+        if (!colon) {
+            /* 'x' is a shortcut for '*:x'. */
+            category = "*";
+            level = std::string(pair, len);
+        } else {
+            category = std::string(pair, colon - pair);
+            level = std::string(colon + 1, comma - colon - 1);
+        }
 
-		/* Both the category and the level must be specified. */
-		if (category.empty() || level.empty())
-			continue;
+        /* Both the category and the level must be specified. */
+        if (category.empty() || level.empty())
+            continue;
 
-		LogSeverity severity = parseLogLevel(level);
-		if (severity == LogInvalid)
-			continue;
+        LogSeverity severity = parseLogLevel(level);
+        if (severity == LogInvalid)
+            continue;
 
-		levels_.push_back({ category, severity });
-	}
+        levels_.push_back({ category, severity });
+    }
 }
 
 /**
