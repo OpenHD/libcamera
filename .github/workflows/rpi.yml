@@ -24,7 +24,6 @@ jobs:
           bind_mount_repository: true
           import_github_env: true
           commands: |
-            set -euxo pipefail
             ls -a
             sudo apt update
             sudo apt install -y \
