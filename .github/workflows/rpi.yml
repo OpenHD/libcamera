@@ -45,7 +45,7 @@ jobs:
             sudo apt update
             apt-cache madison arducam-pivariety-sdk-dev
 
-            sudo apt install -y arducam-pivariety-sdk-dev
+            sudo apt install -y arducam-pivariety-sdk-dev=1.0.5
 
             mkdir -p /opt/libcamera-openhd
             meson build --buildtype=release -Dpipelines=rpi/vc4 -Dipas=rpi/vc4 -Dv4l2=true -Dgstreamer=enabled -Dtest=false -Dlc-compliance=disabled -Dcam=disabled -Dqcam=enabled -Ddocumentation=disabled -Dpycamera=enabled -Dlibexecdir=/usr/lib/arm-linux-gnueabihf --prefix=/usr
