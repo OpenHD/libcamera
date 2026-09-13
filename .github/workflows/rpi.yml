@@ -61,6 +61,7 @@ jobs:
             git init /opt/libcamera-apps
             git -C /opt/libcamera-apps fetch --depth 1 https://github.com/raspberrypi/rpicam-apps.git 9ae39f85ae6bee9761c36b9b5b80d675bc1fa369
             git -C /opt/libcamera-apps checkout --detach FETCH_HEAD
+            git -C /opt/libcamera-apps apply "$GITHUB_WORKSPACE/.github/patches/rpicam-apps-live-bitrate.diff"
             meson setup /opt/libcamera-apps/build /opt/libcamera-apps \
               --buildtype=release --prefix=/usr \
               -Denable_libav=false -Denable_qt=false \
@@ -71,7 +72,7 @@ jobs:
             dpkg -x arducam-pivariety-sdk-dev*.deb /opt/libcamera-openhd
             rm arducam-pivariety-sdk-dev*.deb
 
-            fpm -a armhf -s dir -t deb -n libcamera-openhd -v 1.2.8 \
+            fpm -a armhf -s dir -t deb -n libcamera-openhd -v 1.2.9 \
               -C /opt/libcamera-openhd -p libcamera-openhd_VERSION_ARCH.deb \
               --depends "libboost-program-options1.74.0" \
               --depends "libdrm2" --depends "libexif12" \

@@ -1,0 +1,127 @@
+diff --git a/apps/rpicam_vid.cpp b/apps/rpicam_vid.cpp
+index f7c07d0..c142f0c 100644
+--- a/apps/rpicam_vid.cpp
++++ b/apps/rpicam_vid.cpp
+@@ -11,6 +11,10 @@
+ #include <sys/signalfd.h>
+ #include <sys/stat.h>
+ 
++#include <climits>
++#include <cstdlib>
++#include <cstring>
++
+ #include "core/rpicam_encoder.hpp"
+ #include "output/output.hpp"
+ 
+@@ -25,7 +29,7 @@ static void default_signal_handler(int signal_number)
+ 	LOG(1, "Received signal " << signal_number);
+ }
+ 
+-static int get_key_or_signal(VideoOptions const *options, pollfd p[1])
++static int get_key_or_signal(RPiCamEncoder &app, VideoOptions const *options, pollfd p[1])
+ {
+ 	int key = 0;
+ 	if (signal_received == SIGINT)
+@@ -38,7 +42,16 @@ static int get_key_or_signal(VideoOptions const *options, pollfd p[1])
+ 			char *user_string = nullptr;
+ 			size_t len;
+ 			[[maybe_unused]] size_t r = getline(&user_string, &len, stdin);
+-			key = user_string[0];
++			if (r > 1 && user_string[0] == 'b')
++			{
++				char *end = nullptr;
++				unsigned long bitrate = strtoul(user_string + 1, &end, 10);
++				if (end != user_string + 1 && bitrate <= UINT_MAX)
++					app.SetBitrate(static_cast<unsigned int>(bitrate));
++			}
++			else if (r > 0)
++				key = user_string[0];
++			free(user_string);
+ 		}
+ 	}
+ 	if (options->signal)
+@@ -95,7 +108,7 @@ static void event_loop(RPiCamEncoder &app)
+ 			return;
+ 		else if (msg.type != RPiCamEncoder::MsgType::RequestComplete)
+ 			throw std::runtime_error("unrecognised message!");
+-		int key = get_key_or_signal(options, p);
++		int key = get_key_or_signal(app, options, p);
+ 		if (key == '\n')
+ 			output->Signal();
+ 
+diff --git a/core/rpicam_encoder.hpp b/core/rpicam_encoder.hpp
+index 8690830..d1d225e 100644
+--- a/core/rpicam_encoder.hpp
++++ b/core/rpicam_encoder.hpp
+@@ -53,6 +53,10 @@ public:
+ 	}
+ 	VideoOptions *GetOptions() const { return static_cast<VideoOptions *>(options_.get()); }
+ 	void StopEncoder() { encoder_.reset(); }
++	bool SetBitrate(unsigned int bitrate_bps)
++	{
++		return encoder_ && encoder_->SetBitrate(bitrate_bps);
++	}
+ 
+ protected:
+ 	virtual void createEncoder()
+diff --git a/encoder/encoder.hpp b/encoder/encoder.hpp
+index fda6e02..ecb1a02 100644
+--- a/encoder/encoder.hpp
++++ b/encoder/encoder.hpp
+@@ -32,6 +32,8 @@ public:
+ 	// Encode the given buffer. The buffer is specified both by an fd and size
+ 	// describing a DMABUF, and by a mmapped userland pointer.
+ 	virtual void EncodeBuffer(int fd, size_t size, void *mem, StreamInfo const &info, int64_t timestamp_us) = 0;
++	// Update a running encoder without stopping the camera pipeline.
++	virtual bool SetBitrate(unsigned int bitrate_bps) { return false; }
+ 
+ protected:
+ 	InputDoneCallback input_done_callback_;
+diff --git a/encoder/h264_encoder.cpp b/encoder/h264_encoder.cpp
+index 11d003a..005d382 100644
+--- a/encoder/h264_encoder.cpp
++++ b/encoder/h264_encoder.cpp
+@@ -54,6 +54,10 @@ H264Encoder::H264Encoder(VideoOptions const *options, StreamInfo const &info)
+ 	v4l2_control ctrl = {};
+ 	if (options->bitrate)
+ 	{
++		ctrl.id = V4L2_CID_MPEG_VIDEO_BITRATE_MODE;
++		ctrl.value = V4L2_MPEG_VIDEO_BITRATE_MODE_CBR;
++		if (xioctl(fd_, VIDIOC_S_CTRL, &ctrl) < 0)
++			throw std::runtime_error("failed to set constant bitrate mode");
+ 		ctrl.id = V4L2_CID_MPEG_VIDEO_BITRATE;
+ 		ctrl.value = options->bitrate.bps();
+ 		if (xioctl(fd_, VIDIOC_S_CTRL, &ctrl) < 0)
+@@ -205,6 +209,20 @@ H264Encoder::H264Encoder(VideoOptions const *options, StreamInfo const &info)
+ 	poll_thread_ = std::thread(&H264Encoder::pollThread, this);
+ }
+ 
++bool H264Encoder::SetBitrate(unsigned int bitrate_bps)
++{
++	v4l2_control ctrl = {};
++	ctrl.id = V4L2_CID_MPEG_VIDEO_BITRATE;
++	ctrl.value = bitrate_bps;
++	if (xioctl(fd_, VIDIOC_S_CTRL, &ctrl) < 0)
++	{
++		LOG_ERROR("ERROR: failed to update H264 bitrate to " << bitrate_bps << ": " << strerror(errno));
++		return false;
++	}
++	LOG(1, "Updated H264 bitrate to " << bitrate_bps);
++	return true;
++}
++
+ H264Encoder::~H264Encoder()
+ {
+ 	abortPoll_ = true;
+diff --git a/encoder/h264_encoder.hpp b/encoder/h264_encoder.hpp
+index 9764885..a7bcd62 100644
+--- a/encoder/h264_encoder.hpp
++++ b/encoder/h264_encoder.hpp
+@@ -21,6 +21,7 @@ public:
+ 	~H264Encoder();
+ 	// Encode the given DMABUF.
+ 	void EncodeBuffer(int fd, size_t size, void *mem, StreamInfo const &info, int64_t timestamp_us) override;
++	bool SetBitrate(unsigned int bitrate_bps) override;
+ 
+ private:
+ 	// We want at least as many output buffers as there are in the camera queue
