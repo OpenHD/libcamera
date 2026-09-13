@@ -50,13 +50,36 @@ jobs:
             mkdir -p /opt/libcamera-openhd
             meson build --buildtype=release -Dpipelines=rpi/vc4 -Dipas=rpi/vc4 -Dv4l2=true -Dgstreamer=enabled -Dtest=false -Dlc-compliance=disabled -Dcam=disabled -Dqcam=enabled -Ddocumentation=disabled -Dpycamera=enabled -Dlibexecdir=/usr/lib/arm-linux-gnueabihf --prefix=/usr
             DESTDIR=/opt/libcamera-openhd/ ninja -C build install
+            sudo ninja -C build install
+            sudo ldconfig
             cp -r tuning/* /opt/libcamera-openhd/usr/share/libcamera/ipa/rpi/vc4/
+
+            # Build the matching upstream camera applications against this
+            # OpenHD libcamera build and ship them in the same package. v1.4.2
+            # is from the libcamera 0.1.x generation used by this fork. Pin the
+            # commit so later rpicam-apps API changes cannot break Bullseye.
+            git init /opt/libcamera-apps
+            git -C /opt/libcamera-apps fetch --depth 1 https://github.com/raspberrypi/rpicam-apps.git 9ae39f85ae6bee9761c36b9b5b80d675bc1fa369
+            git -C /opt/libcamera-apps checkout --detach FETCH_HEAD
+            meson setup /opt/libcamera-apps/build /opt/libcamera-apps \
+              --buildtype=release --prefix=/usr \
+              -Denable_libav=false -Denable_qt=false \
+              -Denable_opencv=false -Denable_tflite=false
+            DESTDIR=/opt/libcamera-openhd/ ninja -C /opt/libcamera-apps/build install
 
             sudo apt download arducam-pivariety-sdk-dev
             dpkg -x arducam-pivariety-sdk-dev*.deb /opt/libcamera-openhd
             rm arducam-pivariety-sdk-dev*.deb
 
-            fpm -a armhf -s dir -t deb -n libcamera-openhd -v 1.2.7 -C /opt/libcamera-openhd -p libcamera-openhd_VERSION_ARCH.deb --conflicts "libcamera-dev" --conflicts "libcamera0"
+            fpm -a armhf -s dir -t deb -n libcamera-openhd -v 1.2.8 \
+              -C /opt/libcamera-openhd -p libcamera-openhd_VERSION_ARCH.deb \
+              --depends "libboost-program-options1.74.0" \
+              --depends "libdrm2" --depends "libexif12" \
+              --depends "libjpeg62-turbo" --depends "libpng16-16" \
+              --depends "libtiff5" \
+              --conflicts "libcamera-dev" --conflicts "libcamera0" \
+              --conflicts "libcamera-apps" --conflicts "libcamera-apps-lite" \
+              --conflicts "rpicam-apps"
 
       - name: Upload to Github
         uses: actions/upload-artifact@v4
