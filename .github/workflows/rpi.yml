@@ -24,6 +24,7 @@ jobs:
           bind_mount_repository: true
           import_github_env: true
           commands: |
+            REPO_DIR="$(pwd)"
             ls -a
             sudo apt update
             sudo apt install -y \
@@ -61,7 +62,23 @@ jobs:
             git init /opt/libcamera-apps
             git -C /opt/libcamera-apps fetch --depth 1 https://github.com/raspberrypi/rpicam-apps.git 9ae39f85ae6bee9761c36b9b5b80d675bc1fa369
             git -C /opt/libcamera-apps checkout --detach FETCH_HEAD
-            git -C /opt/libcamera-apps apply "$GITHUB_WORKSPACE/.github/patches/rpicam-apps-live-bitrate.diff"
+            PATCH_FILE=""
+            for candidate in \
+              "${REPO_DIR}/.github/patches/rpicam-apps-live-bitrate.diff" \
+              "$(pwd)/.github/patches/rpicam-apps-live-bitrate.diff" \
+              "/libcamera/.github/patches/rpicam-apps-live-bitrate.diff" \
+              "${GITHUB_WORKSPACE}/.github/patches/rpicam-apps-live-bitrate.diff"; do
+              if [ -n "$candidate" ] && [ -f "$candidate" ]; then
+                PATCH_FILE="$candidate"
+                break
+              fi
+            done
+            if [ -z "$PATCH_FILE" ]; then
+              echo "ERROR: rpicam-apps patch file not found!"
+              exit 1
+            fi
+            echo "Applying patch: $PATCH_FILE"
+            git -C /opt/libcamera-apps apply "$PATCH_FILE"
             meson setup /opt/libcamera-apps/build /opt/libcamera-apps \
               --buildtype=release --prefix=/usr \
               -Denable_libav=false -Denable_qt=false \
