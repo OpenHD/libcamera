@@ -24,8 +24,10 @@ index f7c07d0..c142f0c 100644
  	if (signal_received == SIGINT)
 @@ -38,7 +42,16 @@ static int get_key_or_signal(VideoOptions const *options, pollfd p[1])
  			char *user_string = nullptr;
- 			size_t len;
- 			[[maybe_unused]] size_t r = getline(&user_string, &len, stdin);
+-			size_t len;
+-			[[maybe_unused]] size_t r = getline(&user_string, &len, stdin);
++			size_t len = 0;
++			ssize_t r = getline(&user_string, &len, stdin);
 -			key = user_string[0];
 +			if (r > 1 && user_string[0] == 'b')
 +			{
@@ -81,6 +83,14 @@ diff --git a/encoder/h264_encoder.cpp b/encoder/h264_encoder.cpp
 index 11d003a..005d382 100644
 --- a/encoder/h264_encoder.cpp
 +++ b/encoder/h264_encoder.cpp
+@@ -17,6 +17,7 @@
+ #include <linux/videodev2.h>
+ 
+ #include <chrono>
++#include <cstring>
+ #include <iostream>
+ 
+ #include "h264_encoder.hpp"
 @@ -54,6 +54,10 @@ H264Encoder::H264Encoder(VideoOptions const *options, StreamInfo const &info)
  	v4l2_control ctrl = {};
  	if (options->bitrate)
