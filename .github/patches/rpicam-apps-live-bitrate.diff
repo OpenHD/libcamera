@@ -66,6 +66,39 @@ index 8690830..d1d225e 100644
  
  protected:
  	virtual void createEncoder()
+diff --git a/core/video_options.hpp b/core/video_options.hpp
+index 918596a..f154999 100644
+--- a/core/video_options.hpp
++++ b/core/video_options.hpp
+@@ -88,6 +88,10 @@ struct VideoOptions : public Options
+ 		options_.add_options()
+ 			("bitrate,b", value<std::string>(&bitrate_)->default_value("0bps"),
+ 			 "Set the video bitrate for encoding. If no units are provided, default to bits/second.")
++			("qp-min", value<unsigned int>(&qp_min)->default_value(0),
++			 "Set the minimum H.264 quantisation parameter (0 leaves the driver default)")
++			("qp-max", value<unsigned int>(&qp_max)->default_value(0),
++			 "Set the maximum H.264 quantisation parameter (0 leaves the driver default)")
+ 			("profile", value<std::string>(&profile),
+ 			 "Set the encoding profile")
+ 			("level", value<std::string>(&level),
+@@ -164,6 +168,8 @@ struct VideoOptions : public Options
+ 	}
+ 
+ 	Bitrate bitrate;
++	unsigned int qp_min;
++	unsigned int qp_max;
+ 	std::string profile;
+ 	std::string level;
+ 	unsigned int intra;
+@@ -241,6 +247,8 @@ struct VideoOptions : public Options
+ 	{
+ 		Options::Print();
+ 		std::cerr << "    bitrate: " << bitrate.kbps() << "kbps" << std::endl;
++		std::cerr << "    qp-min: " << qp_min << std::endl;
++		std::cerr << "    qp-max: " << qp_max << std::endl;
+ 		std::cerr << "    profile: " << profile << std::endl;
+ 		std::cerr << "    level:  " << level << std::endl;
+ 		std::cerr << "    intra: " << intra << std::endl;
 diff --git a/encoder/encoder.hpp b/encoder/encoder.hpp
 index fda6e02..ecb1a02 100644
 --- a/encoder/encoder.hpp
@@ -91,17 +124,36 @@ index 11d003a..005d382 100644
  #include <iostream>
  
  #include "h264_encoder.hpp"
-@@ -54,6 +54,10 @@ H264Encoder::H264Encoder(VideoOptions const *options, StreamInfo const &info)
+@@ -54,11 +55,29 @@ H264Encoder::H264Encoder(VideoOptions const *options, StreamInfo const &info)
  	v4l2_control ctrl = {};
  	if (options->bitrate)
  	{
 +		ctrl.id = V4L2_CID_MPEG_VIDEO_BITRATE_MODE;
-+		ctrl.value = V4L2_MPEG_VIDEO_BITRATE_MODE_CBR;
++		ctrl.value = V4L2_MPEG_VIDEO_BITRATE_MODE_VBR;
 +		if (xioctl(fd_, VIDIOC_S_CTRL, &ctrl) < 0)
-+			throw std::runtime_error("failed to set constant bitrate mode");
++			throw std::runtime_error("failed to set variable bitrate mode");
  		ctrl.id = V4L2_CID_MPEG_VIDEO_BITRATE;
  		ctrl.value = options->bitrate.bps();
  		if (xioctl(fd_, VIDIOC_S_CTRL, &ctrl) < 0)
+ 			throw std::runtime_error("failed to set bitrate");
+ 	}
++	if (options->qp_min)
++	{
++		ctrl.id = V4L2_CID_MPEG_VIDEO_H264_MIN_QP;
++		ctrl.value = options->qp_min;
++		if (xioctl(fd_, VIDIOC_S_CTRL, &ctrl) < 0)
++			throw std::runtime_error("failed to set minimum H264 QP");
++	}
++	if (options->qp_max)
++	{
++		ctrl.id = V4L2_CID_MPEG_VIDEO_H264_MAX_QP;
++		ctrl.value = options->qp_max;
++		if (xioctl(fd_, VIDIOC_S_CTRL, &ctrl) < 0)
++			throw std::runtime_error("failed to set maximum H264 QP");
++	}
+ 	if (!options->profile.empty())
+ 	{
+ 		static const std::map<std::string, int> profile_map =
 @@ -205,6 +209,20 @@ H264Encoder::H264Encoder(VideoOptions const *options, StreamInfo const &info)
  	poll_thread_ = std::thread(&H264Encoder::pollThread, this);
  }
