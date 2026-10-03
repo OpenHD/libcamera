@@ -19,6 +19,10 @@ Files: src/ipa/rpi/vc4/data/*.json
 Copyright: 2019-2020 Raspberry Pi Ltd
 License: BSD-2-Clause
 
+Files: src/ipa/rpi/vc4/data/imx415.json
+Copyright: 2025 Raspberry Pi Ltd
+License: BSD-2-Clause
+
 Files: src/qcam/assets/feathericons/*.svg
 Copyright: 2019 Cole Bemis (and other Feather icons contributors)
 License: MIT
