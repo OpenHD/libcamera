@@ -26,7 +26,8 @@ private:
 	 * Smallest difference between the frame length and integration time,
 	 * in units of lines.
 	 */
-	static constexpr int frameIntegrationDiff = 2;
+	// Match IMX662_EXPOSURE_OFFSET in the OpenHD 6.1 driver.
+	static constexpr int frameIntegrationDiff = 4;
 };
 
 CamHelperImx662::CamHelperImx662()
@@ -37,7 +38,7 @@ CamHelperImx662::CamHelperImx662()
 uint32_t CamHelperImx662::gainCode(double gain) const
 {
 	int code = 66.6667 * log10(gain);
-	return std::max(0, std::min(code, 0xf0));
+	return std::max(0, std::min(code, 100));
 }
 
 double CamHelperImx662::gain(uint32_t gainCode) const
