@@ -252,6 +252,7 @@ enum {
 	// Dirty end
 	PROP_AUTO_FOCUS_MODE,
 	PROP_AUTO_FOCUS_TRIGGER,
+	PROP_AUTO_FOCUS_SUPPORTED,
 };
 
 G_DEFINE_TYPE_WITH_CODE(GstLibcameraSrc, gst_libcamera_src, GST_TYPE_ELEMENT,
@@ -906,6 +907,14 @@ gst_libcamera_src_get_property(GObject *object, guint prop_id, GValue *value,
 	case PROP_AUTO_FOCUS_MODE:
 		g_value_set_enum(value, static_cast<gint>(self->auto_focus_mode));
 		break;
+	case PROP_AUTO_FOCUS_SUPPORTED: {
+		const auto &camera = self->state->cam_;
+		const bool supported = camera &&
+			camera->controls().find(&controls::AfMode) != camera->controls().end() &&
+			camera->controls().find(&controls::AfTrigger) != camera->controls().end();
+		g_value_set_boolean(value, supported);
+		break;
+	}
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -1150,4 +1159,8 @@ gst_libcamera_src_class_init(GstLibcameraSrcClass *klass)
 			"Set true to start a new autofocus scan on the next camera request",
 			false, static_cast<GParamFlags>(G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS |
 				GST_PARAM_MUTABLE_PLAYING)));
+	g_object_class_install_property(object_class, PROP_AUTO_FOCUS_SUPPORTED,
+		g_param_spec_boolean("auto-focus-supported", "One-shot autofocus capability",
+			"Whether the open camera exposes autofocus mode and trigger controls",
+			false, static_cast<GParamFlags>(G_PARAM_READABLE | G_PARAM_STATIC_STRINGS)));
 }
