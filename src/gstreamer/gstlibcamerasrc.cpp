@@ -221,6 +221,7 @@ struct _GstLibcameraSrc {
 	gchar *camera_name;
 	controls::AfModeEnum auto_focus_mode = controls::AfModeManual;
 	gboolean autofocus_pending;
+	gboolean autofocus_supported;
 
 	GstLibcameraSrcState *state;
 	GstLibcameraAllocator *allocator;
@@ -488,6 +489,13 @@ gst_libcamera_src_open(GstLibcameraSrc *self)
 	/* No need to lock here, we didn't start our threads yet. */
 	self->state->cm_ = cm;
 	self->state->cam_ = cam;
+	{
+		GLibLocker locker(GST_OBJECT(self));
+		const auto &available = cam->controls();
+		self->autofocus_supported =
+			available.find(&controls::AfMode) != available.end() &&
+			available.find(&controls::AfTrigger) != available.end();
+	}
 
 	return true;
 }
@@ -773,6 +781,11 @@ gst_libcamera_src_close(GstLibcameraSrc *self)
 				    ("libcamera::Camera.release() failed: %s", g_strerror(-ret)));
 	}
 
+	{
+		GLibLocker locker(GST_OBJECT(self));
+		self->autofocus_supported = false;
+		self->autofocus_pending = false;
+	}
 	state->cam_.reset();
 	state->cm_.reset();
 }
@@ -907,14 +920,9 @@ gst_libcamera_src_get_property(GObject *object, guint prop_id, GValue *value,
 	case PROP_AUTO_FOCUS_MODE:
 		g_value_set_enum(value, static_cast<gint>(self->auto_focus_mode));
 		break;
-	case PROP_AUTO_FOCUS_SUPPORTED: {
-		const auto &camera = self->state->cam_;
-		const bool supported = camera &&
-			camera->controls().find(&controls::AfMode) != camera->controls().end() &&
-			camera->controls().find(&controls::AfTrigger) != camera->controls().end();
-		g_value_set_boolean(value, supported);
+	case PROP_AUTO_FOCUS_SUPPORTED:
+		g_value_set_boolean(value, self->autofocus_supported);
 		break;
-	}
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
