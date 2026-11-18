@@ -220,6 +220,7 @@ struct _GstLibcameraSrc {
 
 	gchar *camera_name;
 	controls::AfModeEnum auto_focus_mode = controls::AfModeManual;
+	gboolean autofocus_pending;
 
 	GstLibcameraSrcState *state;
 	GstLibcameraAllocator *allocator;
@@ -250,6 +251,7 @@ enum {
 	//PROP_AWBGAINS - too complicated
 	// Dirty end
 	PROP_AUTO_FOCUS_MODE,
+	PROP_AUTO_FOCUS_TRIGGER,
 };
 
 G_DEFINE_TYPE_WITH_CODE(GstLibcameraSrc, gst_libcamera_src, GST_TYPE_ELEMENT,
@@ -297,6 +299,21 @@ int GstLibcameraSrcState::queueRequest()
 		wrap->attachBuffer(stream, buffer);
 	}
 
+	{
+		GLibLocker locker(GST_OBJECT(src_));
+		if (src_->autofocus_pending) {
+			const auto &available = cam_->controls();
+			if (available.find(&controls::AfTrigger) != available.end() &&
+			    available.find(&controls::AfMode) != available.end()) {
+				wrap->request_->controls().set(controls::AfMode, controls::AfModeAuto);
+				wrap->request_->controls().set(controls::AfTrigger, controls::AfTriggerStart);
+				GST_INFO_OBJECT(src_, "One-shot autofocus triggered");
+			} else {
+				GST_WARNING_OBJECT(src_, "Camera does not support one-shot autofocus");
+			}
+			src_->autofocus_pending = false;
+		}
+	}
 	GST_TRACE_OBJECT(src_, "Requesting buffers");
 	cam_->queueRequest(wrap->request_.get());
 
@@ -820,6 +837,10 @@ gst_libcamera_src_set_property(GObject *object, guint prop_id,
 	case PROP_AUTO_FOCUS_MODE:
 		self->auto_focus_mode = static_cast<controls::AfModeEnum>(g_value_get_enum(value));
 		break;
+	case PROP_AUTO_FOCUS_TRIGGER:
+		if (g_value_get_boolean(value))
+			self->autofocus_pending = true;
+		break;
 	default:
 		G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
 		break;
@@ -1124,4 +1145,9 @@ gst_libcamera_src_class_init(GstLibcameraSrcClass *klass)
 				 static_cast<gint>(controls::AfModeManual),
 				 G_PARAM_WRITABLE);
 	g_object_class_install_property(object_class, PROP_AUTO_FOCUS_MODE, spec);
+	g_object_class_install_property(object_class, PROP_AUTO_FOCUS_TRIGGER,
+		g_param_spec_boolean("auto-focus-trigger", "Trigger one-shot autofocus",
+			"Set true to start a new autofocus scan on the next camera request",
+			false, static_cast<GParamFlags>(G_PARAM_WRITABLE | G_PARAM_STATIC_STRINGS |
+				GST_PARAM_MUTABLE_PLAYING)));
 }
